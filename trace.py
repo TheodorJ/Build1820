@@ -3,6 +3,7 @@ import math
 
 smooth_filter = np.array([[0.05, 0.05, 0.05]] * 20)
 
+# numpy doesn't do 2d convolution :(
 def convolve2d(x, filter):
     out = []
 
