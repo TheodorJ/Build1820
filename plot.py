@@ -40,12 +40,8 @@ with open(file_name) as csvfile:
 # Set up 3D plot
 plt.rcParams['legend.fontsize'] = 10
 axes = plt.figure().gca(projection='3d')
-
 # Quit when we close the plot
 plt.gcf().canvas.mpl_connect('close_event', quit)
-
-#points = points[0:2]
-#print(points)
 
 # Add parametric curve to plot
 x = [(pt[0]) for pt in points]
