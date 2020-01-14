@@ -21,9 +21,10 @@ for i in range(1, 6):
         clusters = k_cluster(trace)
 
         cluster = clusters[0][0]
+        cluster_angles = [cos(cluster, [1.0, 1.0, 0]), cos(cluster, [1.0, 0.0, 1.0])]
 
         # Append it to the list
-        vectors.append(cluster)
+        vectors.append(cluster_angles)
         labels.append(dir)
 
 # Now let's try training a basic SVM for to classify these
@@ -45,7 +46,7 @@ labels_enc_1hot = torch.LongTensor([int_to_one_hot(label) for label in labels_en
 class Net(nn.Module):
     def __init__(self):
         super(Net, self).__init__()
-        self.fc1 = nn.Linear(3, 5)
+        self.fc1 = nn.Linear(2, 5)
         self.fc2 = nn.Linear(5, 4)
 
     def forward(self, x):
@@ -62,7 +63,7 @@ criterion = nn.CrossEntropyLoss()
 svm_crite = nn.MultiLabelMarginLoss()
 optimizer = optim.Adam(net.parameters())
 
-for epoch in range(2000):
+for epoch in range(8000):
     # zero the parameter gradients
     optimizer.zero_grad()
 
@@ -92,11 +93,17 @@ for epoch in range(2000):
     if epoch % 1 == 0:
         print(running_loss)"""
 
-
+correct = 0
+total = 0
 for i in range(len(vectors)):
     x = vectors[i]
     y = labels[i]
 
     outputs = net(torch.Tensor(x))
     idx_max = torch.argmax(outputs).item()
-    print("%s == %s" % (y, label_dec[idx_max]))
+    if y == label_dec[idx_max]:
+        correct += 1
+    total += 1
+    #print("%s == %s" % (y, label_dec[idx_max]))
+
+print("Training accuracy: %d percent" % ((correct / total) * 100))
