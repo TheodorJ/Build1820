@@ -17,18 +17,25 @@ for name in ['shivani', 'tj']:
             trace = load_trace("data/simple/%s/%s%d.csv" % (name, dir, i))
 
             # Calculate and remove the force of gravity
-            #gravity = get_gravity(load_trace("data/simple/rest.csv"))
-            #trace = remove_gravity(trace, gravity)
-            trace = convolve2d(trace, difference_filter)
+            gravity = get_gravity(load_trace("data/simple/rest.csv"))
+            trace = remove_gravity(trace, gravity)
+            #trace = convolve2d(trace, difference_filter)
 
             # Find the first acceleration cluster
             clusters = k_cluster(trace)
 
+            if(len(clusters[0]) < 2):
+                continue
+
             cluster = clusters[0][0]
+            cluster1 = clusters[0][1]
+
+
             cluster_angles = [cos(cluster, [1.0, 1.0, 0]), cos(cluster, [1.0, 0.0, 1.0])]
 
             # Append it to the list
-            vectors.append(cluster)
+            #vectors.append(cluster)
+            vectors.append(np.concatenate((cluster, cluster1)))
             labels.append(dir)
 
 # Now let's try training a basic SVM for to classify these
@@ -49,9 +56,9 @@ labels_enc_1hot = torch.FloatTensor([int_to_one_hot(label) for label in labels_e
 
 
 # Separate train and validation data
-indices = list(np.random.permutation(60))
-val_indices = indices[:15]
-train_indices = indices[15:]
+indices = list(np.random.permutation(len(vectors)))
+val_indices = indices[:10]
+train_indices = indices[10:]
 
 val_vectors = [vectors[i] for i in val_indices]
 vectors = [vectors[i] for i in train_indices]
@@ -69,8 +76,8 @@ labels_enc_1hot = labels_enc_1hot[train_indices]
 class Net(nn.Module):
     def __init__(self):
         super(Net, self).__init__()
-        self.fc1 = nn.Linear(3, 8)
-        self.fc3 = nn.Linear(8, 4)
+        self.fc1 = nn.Linear(6, 32)
+        self.fc3 = nn.Linear(32, 4)
 
     def forward(self, x):
         x = F.relu(self.fc1(x))
@@ -86,7 +93,7 @@ criterion = nn.CrossEntropyLoss()
 svm_crite = nn.MultiLabelSoftMarginLoss()
 optimizer = optim.Adam(net.parameters())
 
-for epoch in range(8000):
+for epoch in range(2000):
     # zero the parameter gradients
     optimizer.zero_grad()
 
@@ -98,7 +105,7 @@ for epoch in range(8000):
 
     # print statistics
     running_loss = loss.item()
-    if epoch % 50 == 0:
+    if epoch % 200 == 0:
         print(running_loss)
 
         correct = 0
@@ -117,7 +124,7 @@ for epoch in range(8000):
         print("Validation accuracy: %d percent" % ((correct / total) * 100))
 
 """# Retrain as an SVM
-for epoch in range(200):
+for epoch in range(1):
     # zero the parameter gradients
     optimizer.zero_grad()
 
@@ -129,7 +136,7 @@ for epoch in range(200):
 
     # print statistics
     running_loss = loss.item()
-    if epoch % 10 == 0:
+    if epoch % 1 == 0:
         print(running_loss)
 
         correct = 0
