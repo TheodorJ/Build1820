@@ -11,12 +11,19 @@
 // ---------------------- //
 
 // Game state
-enum STATE {GAME_END = 0, GAME_START = 1, BTN_UP = 2, BTN_DOWN = 3};
+enum state_t {GAME_END = 0, GAME_START = 1, BTN_UP = 2, BTN_DOWN = 3};
 
-STATE state = GAME_END;
+state_t state = GAME_END;
+
+// Gesture detection
+enum spell_t {ERR = -1, LEFT = 0, RIGHT = 1, UP = 2, DOWN = 3};
+String spell_names[4] = {"Left", "Right", "Up", "Down"};
+// Minimum acceleration to trigger a spell (m/s^2)
+const float min_spell_accel = 2.5;
+#define COS_45 (0.7071)
 
 // Bluetooth
-char *ble_name = "MagicWand";
+const char *ble_name = "MagicWand";
 BLEServer * ble_server = NULL;
 BLECharacteristic* ble_spell_characteristic = NULL;
 volatile bool ble_dev_connected = false;
@@ -38,7 +45,7 @@ float dot3(float x[3], float y[3]) {
   return (x[0] * y[0]) + (x[1] * y[1]) + (x[2] * x[2]);
 }
 
-float dot2(float x[2], float y[2]){
+float dot2(float x[2], float y[2]) {
   return (x[0] * y[0]) + (x[1] * y[1]);
 }
 
@@ -169,7 +176,7 @@ bool check_ble_status(void)
     Serial.println("[BLE] restarting advertising");
     ble_old_dev_connected = ble_dev_connected;
   }
-  
+
   // Check if BLE has reconnected
   if (ble_dev_connected && !ble_old_dev_connected) {
     display_ble_status();
@@ -180,7 +187,7 @@ bool check_ble_status(void)
 }
 
 // Send a newly detected spell to connected device (raspberry Pi) via BLE notification
-void ble_send_value(char *spell)
+void ble_send_value(const char *spell)
 {
   if (check_ble_status()) {
     ble_spell_characteristic->setValue((uint8_t*)spell, strlen(spell));
@@ -189,6 +196,41 @@ void ble_send_value(char *spell)
     Serial.println(spell);
     delay(3); // To prevent congestion. TODO can remove if delay is guaranteed elsewise
   }
+}
+
+// Detect the direction of an acceleration vector, equivalently which spell this is.
+// Gravity should already be removed from p3.
+spell_t accel_dir(float gravity3[3], float p3[3])
+{
+  // Only use the Y and Z of both vectors
+  float gravity2[2] = {gravity3[1], gravity3[2]};
+  float p[2] = {p3[1], p3[2]};
+
+  // Cosine of angle between gravity and p
+  float cos_vec = vec_cos2(gravity2, p);
+
+  // Prediction of what spell this is
+  spell_t pred;
+
+  // (x component of) cross product between gravity and p3
+  if (cos_vec > COS_45) {
+    // Large cos means along direction of gravity, and measured gravity actually points against gravity
+    pred = UP;
+  } else if (cos_vec < -1 * COS_45) {
+    // Large negative cos means against dir of gravity, flipped as before
+    pred = DOWN;
+  } else {
+    // Middling cos means angle is left or right, use cross product to determine
+    float cross = gravity2[0] * p[1] - gravity2[1] * p[0];
+
+    if (cross > 0) {
+      pred = RIGHT;
+    } else {
+      pred = LEFT;
+    }
+  }
+
+  return pred;
 }
 
 // -------------- //
@@ -261,7 +303,7 @@ void init_ble(void)
 void connect_ble(void)
 {
   // Hang until connection callback changes status
-  while(!ble_dev_connected);
+  while (!ble_dev_connected);
 
   display_ble_status();
 }
@@ -282,7 +324,7 @@ void setup(void)
 
 void loop(void)
 {
-  /* Get a new sensor event */
+  // Read accelerometer
   sensors_event_t event;
   accel.getEvent(&event);
 
@@ -313,6 +355,26 @@ void loop(void)
       //   send(spell);  // Send the spell to the hat as a CAST <spell> message
       //   state = BTN_UP;
       break;
+  }
+
+  // TODO use a real measurement of gravity, this is temporary
+  float gravity[3] = {0.0, 0.0, 10.0};
+  
+  float accel[3] = {event.acceleration.x - gravity[0],
+                    event.acceleration.y - gravity[1],
+                    event.acceleration.z - gravity[2]
+                   };
+
+  // Get magnitude of this acceleration in YZ plane
+  float mag_p = sqrt(sq(accel[1]) + sq(accel[2]));
+  if (mag_p > min_spell_accel)
+  {
+    spell_t spell = accel_dir(gravity, accel);
+    String spell_name = spell_names[spell];
+    ble_send_value(spell_name.c_str());
+    Serial.print("Spell cast: ");
+    Serial.println(spell_name);
+    delay(1000);
   }
 
   // if(receive_GAME_END):
