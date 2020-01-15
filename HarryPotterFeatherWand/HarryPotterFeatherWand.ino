@@ -6,6 +6,17 @@ enum STATE {GAME_END=0, GAME_START=1, BTN_UP=2, BTN_DOWN=3};
 
 STATE state = GAME_END;
 
+float dot(float[3] x, float[3] y) {
+  return (x[0] * y[0]) + (x[1] * y[1]) + (x[2] * x[2]);
+}
+
+float cosine(float[3] x, float[3] y) {
+  float x_dot_y = dot(x, y);
+  float x_mag = dot(x, x);
+  float y_mag = dot(y, y);
+  return sqrt((x_dot_y * x_dot_y) / (x_mag * y_mag))
+}
+
 /* Assign a unique ID to this sensor at the same time */
 /* Uncomment following line for default Wire bus      */
 Adafruit_ADXL343 accel = Adafruit_ADXL343(12345);
