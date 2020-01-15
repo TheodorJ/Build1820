@@ -95,110 +95,113 @@ def gesture_similarity(x, y):
     sum_differences = (len(x) - len(y))
     return sum_differences
 
-if (len(sys.argv) != 2):
-    print("Usage: " + sys.argv[0] + " TRACE.csv")
-    exit(1)
+if __name__ == "__main__":
+    if (len(sys.argv) != 2):
+        print("Usage: " + sys.argv[0] + " TRACE.csv")
+        exit(1)
 
-file_name = sys.argv[1]
-gravity = get_gravity(load_trace("data/rest.csv"))
+    file_name = sys.argv[1]
+    gravity = get_gravity(load_trace("data/rest.csv"))
 
-triangle_data =[]
-for fd in triangle_files:
-    trace = load_trace(fd)
+    triangle_data =[]
+    for fd in triangle_files:
+        trace = load_trace(fd)
+        trace = remove_gravity(trace, gravity)
+        trace = convolve2d(trace, smooth_filter)
+        clusters, cluster_sizes = k_cluster(trace)
+        assert(len(clusters) == len(cluster_sizes))
+
+
+        print(len(clusters))
+        triangle_data.append(delta_angles(clusters))
+
+    print("")
+    square_data =[]
+    for fd in square_files:
+        trace = load_trace(fd)
+        trace = remove_gravity(trace, gravity)
+        trace = convolve2d(trace, smooth_filter)
+        clusters, cluster_sizes = k_cluster(trace)
+        assert(len(clusters) == len(cluster_sizes))
+
+        print(len(clusters))
+        square_data.append(delta_angles(clusters))
+
+
+
+    trace = load_trace(file_name)
     trace = remove_gravity(trace, gravity)
     trace = convolve2d(trace, smooth_filter)
     clusters, cluster_sizes = k_cluster(trace)
-    assert(len(clusters) == len(cluster_sizes))
+    """assert(len(clusters) == len(cluster_sizes))
 
-
+    print("")
+    print(trace.shape)
     print(len(clusters))
-    triangle_data.append(delta_angles(clusters))
+    print(clusters)
+    print(delta_angles(clusters))"""
 
-square_data =[]
-for fd in square_files:
-    trace = load_trace(fd)
-    trace = remove_gravity(trace, gravity)
-    trace = convolve2d(trace, smooth_filter)
-    clusters, cluster_sizes = k_cluster(trace)
-    assert(len(clusters) == len(cluster_sizes))
+    print("")
+    print(len(clusters))
+    print("Similarity to square data:")
+    square_similarities = []
+    for sq in square_data:
+        square_similarities.append(gesture_similarity(delta_angles(clusters), sq))
+        print(gesture_similarity(delta_angles(clusters), sq))
 
-    square_data.append(delta_angles(clusters))
+    print("Max square similarity:")
+    print(max(square_similarities))
 
+    print("Similarity to triangle data:")
+    triangle_similarities = []
+    for tr in triangle_data:
+        triangle_similarities.append(gesture_similarity(delta_angles(clusters), tr))
+        print(gesture_similarity(delta_angles(clusters), tr))
 
-
-trace = load_trace(file_name)
-trace = remove_gravity(trace, gravity)
-trace = convolve2d(trace, smooth_filter)
-clusters, cluster_sizes = k_cluster(trace)
-"""assert(len(clusters) == len(cluster_sizes))
-
-print("")
-print(trace.shape)
-print(len(clusters))
-print(clusters)
-print(delta_angles(clusters))"""
-
-print("")
-print(len(clusters))
-print("Similarity to square data:")
-square_similarities = []
-for sq in square_data:
-    square_similarities.append(gesture_similarity(delta_angles(clusters), sq))
-    print(gesture_similarity(delta_angles(clusters), sq))
-
-print("Max square similarity:")
-print(max(square_similarities))
-
-print("Similarity to triangle data:")
-triangle_similarities = []
-for tr in triangle_data:
-    triangle_similarities.append(gesture_similarity(delta_angles(clusters), tr))
-    print(gesture_similarity(delta_angles(clusters), tr))
-
-print("Max triangle similarity")
-print(max(triangle_similarities))
+    print("Max triangle similarity")
+    print(max(triangle_similarities))
 
 
 
-exit(1)
-# Plot trace
+    exit(1)
+    # Plot trace
 
-# Set up 3D plot
-plt.rcParams['legend.fontsize'] = 10
-axes = plt.figure().gca(projection='3d')
-# Quit when we close the plot
-plt.gcf().canvas.mpl_connect('close_event', quit)
+    # Set up 3D plot
+    plt.rcParams['legend.fontsize'] = 10
+    axes = plt.figure().gca(projection='3d')
+    # Quit when we close the plot
+    plt.gcf().canvas.mpl_connect('close_event', quit)
 
-# Turn clusters into a series of points
-# Initial position and velocity
-pos = [0., 0., 0.]
-vel = [0., 0., 0.]
-# Points to plot
-points = []
-# Delta-time for each reading (seconds)
-TIME_STEP = 0.01
+    # Turn clusters into a series of points
+    # Initial position and velocity
+    pos = [0., 0., 0.]
+    vel = [0., 0., 0.]
+    # Points to plot
+    points = []
+    # Delta-time for each reading (seconds)
+    TIME_STEP = 0.01
 
-for cluster_idx in range(len(clusters)):
-    for i in range(3):
-        # dv = a * dt
-        vel[i] += (float(clusters[cluster_idx][i]) *
-                   TIME_STEP *
-                   cluster_sizes[cluster_idx])
-        # dx = v * dt
-        pos[i] += vel[i] * TIME_STEP * cluster_sizes[cluster_idx]
-    points.append((pos[0], pos[1], pos[2]))
+    for cluster_idx in range(len(clusters)):
+        for i in range(3):
+            # dv = a * dt
+            vel[i] += (float(clusters[cluster_idx][i]) *
+                       TIME_STEP *
+                       cluster_sizes[cluster_idx])
+            # dx = v * dt
+            pos[i] += vel[i] * TIME_STEP * cluster_sizes[cluster_idx]
+        points.append((pos[0], pos[1], pos[2]))
 
-# Add parametric curve to plot
-x = [(pt[0]) for pt in points]
-y = [(pt[1]) for pt in points]
-z = [(pt[2]) for pt in points]
+    # Add parametric curve to plot
+    x = [(pt[0]) for pt in points]
+    y = [(pt[1]) for pt in points]
+    z = [(pt[2]) for pt in points]
 
-print("Plotting " + str(len(points)) + " elements")
+    print("Plotting " + str(len(points)) + " elements")
 
-axes.plot(x, y, z, label="path", marker=".")
-axes.legend()
+    axes.plot(x, y, z, label="path", marker=".")
+    axes.legend()
 
-# Actually display
-plt.draw()
-plt.pause(2)
-input("Press Enter to close")
+    # Actually display
+    plt.draw()
+    plt.pause(2)
+    input("Press Enter to close")
