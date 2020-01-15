@@ -1,35 +1,66 @@
 #include <Wire.h>
 #include <Adafruit_Sensor.h>
 #include <Adafruit_ADXL343.h>
+#include <BLEDevice.h>
+#include <BLEServer.h>
+#include <BLEUtils.h>
+#include <BLE2902.h>
 
-enum STATE {GAME_END=0, GAME_START=1, BTN_UP=2, BTN_DOWN=3};
+// ---------------------- //
+// VARIABLES & PARAMETERS //
+// ---------------------- //
+
+// Game state
+enum STATE {GAME_END = 0, GAME_START = 1, BTN_UP = 2, BTN_DOWN = 3};
 
 STATE state = GAME_END;
 
-float dot(float[3] x, float[3] y) {
+// Bluetooth
+char *ble_name = "MagicWand";
+BLEServer * ble_server = NULL;
+BLECharacteristic* ble_spell_characteristic = NULL;
+volatile bool ble_dev_connected = false;
+bool ble_old_dev_connected = false;
+
+#define SERVICE_UUID        "4fafc201-1fb5-459e-8fcc-c5c9c331914b"
+#define CHARACTERISTIC_UUID "beb5483e-36e1-4688-b7f5-ea07361b26a8"
+
+
+// Accelerometer
+/* Assign a unique ID to this sensor */
+Adafruit_ADXL343 accel = Adafruit_ADXL343(12345);
+
+// ---------------- //
+// HELPER FUNCTIONS //
+// ---------------- //
+
+float dot3(float x[3], float y[3]) {
   return (x[0] * y[0]) + (x[1] * y[1]) + (x[2] * x[2]);
 }
 
-float cosine(float[3] x, float[3] y) {
-  float x_dot_y = dot(x, y);
-  float x_mag = dot(x, x);
-  float y_mag = dot(y, y);
-  return sqrt((x_dot_y * x_dot_y) / (x_mag * y_mag))
+float dot2(float x[2], float y[2]){
+  return (x[0] * y[0]) + (x[1] * y[1]);
 }
 
-/* Assign a unique ID to this sensor at the same time */
-/* Uncomment following line for default Wire bus      */
-Adafruit_ADXL343 accel = Adafruit_ADXL343(12345);
-
-/* NeoTrellis M4, etc.                    */
-/* Uncomment following line for Wire1 bus */
-//Adafruit_ADXL343 accel = Adafruit_ADXL343(12345, &Wire1);
+// Returns the cosine of the angle between two vectors
+float vec_cos3(float x[3], float y[3]) {
+  float x_dot_y = dot3(x, y);
+  float x_mag_sq = dot3(x, x);
+  float y_mag_sq = dot3(y, y);
+  return x_dot_y / sqrt(x_mag_sq * y_mag_sq);
+}
+float vec_cos2(float x[2], float y[2]) {
+  float x_dot_y = dot2(x, y);
+  float x_mag_sq = dot2(x, x);
+  float y_mag_sq = dot2(y, y);
+  return x_dot_y / sqrt(x_mag_sq * y_mag_sq);
+}
 
 void displayDataRate(void)
 {
   Serial.print  ("Data Rate:    ");
 
-  switch(accel.getDataRate())
+  switch (accel.getDataRate())
   {
     case ADXL343_DATARATE_3200_HZ:
       Serial.print  ("3200 ");
@@ -90,7 +121,7 @@ void displayRange(void)
 {
   Serial.print  ("Range:         +/- ");
 
-  switch(accel.getRange())
+  switch (accel.getRange())
   {
     case ADXL343_RANGE_16_G:
       Serial.print  ("16 ");
@@ -111,25 +142,73 @@ void displayRange(void)
   Serial.println(" g");
 }
 
-void setup(void)
-{
-  Serial.begin(9600);
-  while (!Serial);
-  Serial.println("Accelerometer Test"); Serial.println("");
+// BLE connection/disconnection callbacks
+class ble_server_callbacks: public BLEServerCallbacks {
+    void onConnect(BLEServer* pServer) {
+      ble_dev_connected = true;
+    };
 
+    void onDisconnect(BLEServer* pServer) {
+      ble_dev_connected = false;
+    }
+};
+
+void display_ble_status(void)
+{
+  Serial.println(ble_dev_connected ? "[BLE] Connected!" : "[BLE] Disconnected");
+}
+
+// Check for BLE disconnection/connection
+bool check_ble_status(void)
+{
+  // Check if BLE has disconnected
+  if (!ble_dev_connected && ble_old_dev_connected) {
+    display_ble_status();
+    delay(500); // give the bluetooth stack the chance to get things ready
+    ble_server->startAdvertising(); // restart advertising
+    Serial.println("[BLE] restarting advertising");
+    ble_old_dev_connected = ble_dev_connected;
+  }
+  
+  // Check if BLE has reconnected
+  if (ble_dev_connected && !ble_old_dev_connected) {
+    display_ble_status();
+    ble_old_dev_connected = ble_dev_connected;
+  }
+
+  return ble_dev_connected;
+}
+
+// Send a newly detected spell to connected device (raspberry Pi) via BLE notification
+void ble_send_value(char *spell)
+{
+  if (check_ble_status()) {
+    ble_spell_characteristic->setValue((uint8_t*)spell, strlen(spell));
+    ble_spell_characteristic->notify();
+    Serial.print("[BLE] Sent message: ");
+    Serial.println(spell);
+    delay(3); // To prevent congestion. TODO can remove if delay is guaranteed elsewise
+  }
+}
+
+// -------------- //
+// Initialization //
+// -------------- //
+
+// Initialize accelerometer. Hang until complete.
+void init_accelerometer(void)
+{
   /* Initialise the sensor */
-  if(!accel.begin())
+  while (!accel.begin())
   {
     /* There was a problem detecting the ADXL343 ... check your connections */
     Serial.println("Ooops, no ADXL343 detected ... Check your wiring!");
-    while(1);
+    // TODO: flash error LED
+    delay(500);
   }
 
   /* Set the range to whatever is appropriate for your project */
   accel.setRange(ADXL343_RANGE_16_G);
-  // accel.setRange(ADXL343_RANGE_8_G);
-  // accel.setRange(ADXL343_RANGE_4_G);
-  // accel.setRange(ADXL343_RANGE_2_G);
 
   /* Display some basic information on this sensor */
   accel.printSensorDetails();
@@ -138,18 +217,76 @@ void setup(void)
   Serial.println("");
 }
 
-int num_IMU_points = 0;
-float[] IMU_x = float[500]; // 5 seconds of data
-float[] IMU_y = float[500];
-float[] IMU_z = float[500];
+// Initialize BLE connection, do not wait for connections
+void init_ble(void)
+{
+  BLEDevice::init(ble_name);
+
+  Serial.print("[BLE] initialized with MAC ");
+  Serial.println(BLEDevice::getAddress().toString().c_str());
+
+  // Create the BLE Server
+  ble_server = BLEDevice::createServer();
+  ble_server->setCallbacks(new ble_server_callbacks());
+
+  // Create the BLE Service
+  BLEService *ble_service = ble_server->createService(SERVICE_UUID);
+
+  // Create a BLE Characteristic
+  ble_spell_characteristic = ble_service->createCharacteristic(
+                               CHARACTERISTIC_UUID,
+                               BLECharacteristic::PROPERTY_READ   |
+                               BLECharacteristic::PROPERTY_WRITE  |
+                               BLECharacteristic::PROPERTY_NOTIFY |
+                               BLECharacteristic::PROPERTY_INDICATE
+                             );
+
+  // https://www.bluetooth.com/specifications/gatt/viewer?attributeXmlFile=org.bluetooth.descriptor.gatt.client_characteristic_configuration.xml
+  // Create a BLE Descriptor
+  ble_spell_characteristic->addDescriptor(new BLE2902());
+
+  // Start the service
+  ble_service->start();
+
+  // Start advertising
+  BLEAdvertising *ble_advertising = BLEDevice::getAdvertising();
+  ble_advertising->addServiceUUID(SERVICE_UUID);
+  ble_advertising->setScanResponse(false);
+  ble_advertising->setMinPreferred(0x0);  // set value to 0x00 to not advertise this parameter
+  BLEDevice::startAdvertising();
+  Serial.println("[BLE] Waiting for a client connection...");
+}
+
+// Hang until BLE is connected
+void connect_ble(void)
+{
+  // Hang until connection callback changes status
+  while(!ble_dev_connected);
+
+  display_ble_status();
+}
+
+void setup(void)
+{
+  Serial.begin(115200);
+  Serial.println("Welcome to the MagikWand 7000(TM)(C)(R)!"); Serial.println("");
+
+  init_accelerometer();
+  init_ble();
+}
+
+// --------- //
+// MAIN GAME //
+// --------- //
+
 
 void loop(void)
 {
   /* Get a new sensor event */
   sensors_event_t event;
   accel.getEvent(&event);
-  
-  switch(state){
+
+  switch (state) {
     case GAME_END:
       // if(local_BTN_DOWN):
       //   send("BTN_DOWN")
@@ -167,10 +304,10 @@ void loop(void)
       //   state = BTN_DOWN
       break;
     case BTN_DOWN:
-      IMU_x[num_IMU_points] = event.acceleration.x;
-      IMU_y[num_IMU_points] = event.acceleration.y;
-      IMU_z[num_IMU_points] = event.acceleration.z;
-      num_IMU_points += 1;
+      //IMU_x[num_IMU_points] = event.acceleration.x;
+      //IMU_y[num_IMU_points] = event.acceleration.y;
+      //IMU_z[num_IMU_points] = event.acceleration.z;
+      //num_IMU_points += 1;
       // if(local_BTN_UP):
       //   spell = classify_spell(IMU_x, IMU_y, IMU_z, num_IMU_points);
       //   send(spell);  // Send the spell to the hat as a CAST <spell> message
@@ -180,6 +317,9 @@ void loop(void)
 
   // if(receive_GAME_END):
   //   state = GAME_END
-  
+
+  // Check for BLE disconnection
+  // TODO: handle disconnection event
+  check_ble_status();
   delay(500);
 }
