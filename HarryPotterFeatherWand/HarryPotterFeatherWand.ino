@@ -321,6 +321,80 @@ void setup(void)
 // MAIN GAME //
 // --------- //
 
+int len_trace = 500; // 5 seconds of data
+
+int maxwell_prediction(float IMU_x[], float IMU_y[], float IMU_z[], int num_IMU_points) {
+  float gravity_x = IMU_x[0];
+  float gravity_y = IMU_y[1];
+  float gravity_z = IMU_z[2];
+
+  float gravity[2] = {gravity_y, gravity_z};
+  
+
+  int pred = -1;
+
+  boolean max_set = false;
+  float maxa = 0.0;
+  float maxp_y = 0.0;
+  float maxp_z = 0.0;
+  
+  int i = 0;
+  for(i = 0; i < num_IMU_points; i++) {
+    float y = IMU_y[i];
+    float z = IMU_z[i];
+    float p[2] = {y, z};
+    
+    float a = y * y + z * z;
+    if(a > 2.5*2.5) {
+      float cos_vec = vec_cos2(gravity, p);
+      float cross = (gravity_y * z) - (gravity_z * y);
+      if(cos_vec > 0.707) {
+        pred = 2;
+      }
+      else if(cos_vec < -0.707) {
+        pred = 3;
+      }
+      else {
+        if(cross > 0) {
+            pred = 1;
+        }
+        else {
+             pred = 0;
+        }
+      }
+      break;
+    }
+    else {
+      if(!max_set) {
+        max_set = true;
+        maxa = a;
+        maxp_y = y;
+        maxp_z = z;
+      }
+    }
+  }
+  if(pred == -1) {
+    float maxp[2] = {maxp_y, maxp_z};
+    float cos_vec = vec_cos2(gravity, maxp);
+    float cross = (gravity_y * maxp_z) - (gravity_z * maxp_y);
+    if(cos_vec > 0.707) {
+      pred = 2;
+    }
+    else if(cos_vec < -0.707) {
+      pred = 3;
+    }
+    else {
+      if(cross > 0) {
+          pred = 1;
+      }
+      else {
+           pred = 0;
+      }
+    }
+  }
+
+  return pred;
+}
 
 void loop(void)
 {
