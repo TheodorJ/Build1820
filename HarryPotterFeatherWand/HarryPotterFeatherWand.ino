@@ -331,9 +331,9 @@ void loop(void)
   switch (state) {
     case GAME_END:
       // if(local_BTN_DOWN):
-      //   send("BTN_DOWN")
+      //   ble_send_value("BTN_DOWN")
       // if(local_BTN_UP):
-      //   send("BTN_UP")
+      //   ble_send_value("BTN_UP")
       // if(receive_GAME_START):
       //   state = GAME_START
       break;
@@ -352,7 +352,7 @@ void loop(void)
       //num_IMU_points += 1;
       // if(local_BTN_UP):
       //   spell = classify_spell(IMU_x, IMU_y, IMU_z, num_IMU_points);
-      //   send(spell);  // Send the spell to the hat as a CAST <spell> message
+      //   ble_send_value(spell);  // Send the spell to the hat as a CAST <spell> message
       //   state = BTN_UP;
       break;
   }
