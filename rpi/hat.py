@@ -54,8 +54,8 @@ def send_spell(spell, sender):
     spell_birthday = now()
 
 def broadcast(msg):
-    for tn in tns:
-        tn.write(msg)
+    for ip in ips:
+        tns[ip].write(bytes(msg, "UTF-8"))
 
     print("Broadcasting %s" % msg)
 
@@ -161,9 +161,9 @@ def process_message(ip, value):
                 send_spell(ip, "LEFT")
 
             elif(value == "R"): # RIGHT
-                player_last_hor_defend[handle] = now()
+                player_last_hor_defend[ip] = now()
             elif(value == "U"): # UP
-                player_last_ver_defend[handle] = now()
+                player_last_ver_defend[ip] = now()
             elif(value == "D"): # DOWN
 
                 send_spell(ip, "LEFT")
