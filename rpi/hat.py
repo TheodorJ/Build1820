@@ -154,6 +154,7 @@ def process_message(ip, value):
         if(num_wands_ready == 2):
             game_state = "GAME_START"
             broadcast("B")
+            num_wands_ready = 0
 
     if(value == "^"): # button up
         if game_state == "GAME_END":
