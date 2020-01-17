@@ -23,7 +23,13 @@ state = "GAME_END"
 player_health = {}
 player_last_hor_defend = {}
 player_last_ver_defend = {}
-defend_duration = 1000
+defend_duration = 3000
+
+spell_in_air = False
+spell_birthday = now()
+spell_lifespan = 3000 # 3 seconds
+spell_type = "ERR"
+spell_sender = None
 
 # IPs of the wands
 ips = ["192.168.4.11","192.168.4.12"]
@@ -39,6 +45,11 @@ def player_is_hor_defended(player):
 def player_is_ver_defended(player):
     return (now() - player_last_ver_defend[player]) > defend_duration
 
+def send_spell(spell, sender):
+    spell_in_air = True
+    spell_sender = sender
+    spell_type = spell
+    spell_birthday = now()
 
 def process_message(ip, value):
     """
@@ -65,30 +76,15 @@ def process_message(ip, value):
     if(value in spells): # cast
         if(state == "GAME_START"):
             if(value == "L"):   # LEFT
-                # If the other player isn't defended, subtract a health point
-                other_p = other_player(handle)
-
-                if not player_is_hor_defended(other_p):
-                    player_health[other_p] -= 1
-
-                if player_health[other_p] == 0:
-                    # GAME END
-                    state = "GAME_END"
+                send_spell(handle, "LEFT")
 
             elif(value == "R"): # RIGHT
                 player_last_hor_defend[handle] = now()
             elif(value == "U"): # UP
                 player_last_ver_defend[handle] = now()
             elif(value == "D"): # DOWN
-                # If the other player isn't defended, subtract a health point
-                other_p = other_player(handle)
 
-                if not player_is_ver_defended(other_p):
-                    player_health[other_p] -= 1
-
-                if player_health[other_p] == 0:
-                    # GAME END
-                    state = "GAME_END"
+                send_spell(handle, "LEFT")
             else:             # Error
                 pass
 
@@ -99,6 +95,33 @@ for ip in ips:
 
 while 1:
     # Main game loop
+
+    if spell_in_air and (now() - spell_birthday) > spell_lifespan:
+        if spell_type == "LEFT":
+            # If the other player isn't defended, subtract a health point
+            other_p = other_player(spell_sender)
+
+            if not player_is_hor_defended(other_p):
+                player_health[other_p] -= 1
+
+            if player_health[other_p] == 0:
+                # GAME END
+                state = "GAME_END"
+
+            spell_in_air = False
+        if spell_type == "DOWN":
+            # If the other player isn't defended, subtract a health point
+            other_p = other_player(spell_sender)
+
+            if not player_is_ver_defended(other_p):
+                player_health[other_p] -= 1
+
+            if player_health[other_p] == 0:
+                # GAME END
+                state = "GAME_END"
+
+            spell_in_air = False
+
 
     for ip in ips:
         tn = tns[ip]
