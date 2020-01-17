@@ -157,7 +157,7 @@ def process_message(ip, value):
     global num_wands_ready
 
     if ip not in player_health.keys():
-        player_health[ip] = 2
+        player_health[ip] = 1
         player_last_hor_defend[ip] = now()
         player_last_ver_defend[ip] = now()
 
