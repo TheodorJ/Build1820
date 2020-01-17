@@ -31,7 +31,7 @@ spell_lifespan = 2000 # 2 seconds
 spell_type = "ERR"
 spell_sender = None
 
-spell_rebound = False
+rebound = False
 
 # IPs of the wands
 ips = ["192.168.4.11","192.168.4.12"]
