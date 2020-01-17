@@ -27,7 +27,7 @@ defend_duration = 1000
 
 spell_in_air = False
 spell_birthday = now()
-spell_lifespan = 2000 # 3 seconds
+spell_lifespan = 2000 # 2 seconds
 spell_type = "ERR"
 spell_sender = None
 
@@ -48,6 +48,10 @@ def player_is_ver_defended(player):
     return (now() - player_last_ver_defend[player]) > defend_duration
 
 def send_spell(spell, sender):
+    global spell_in_air
+    global spell_sender
+    global spell_type
+    global spell_birthday
     spell_in_air = True
     spell_sender = sender
     spell_type = spell
@@ -184,12 +188,14 @@ while 1:
             other_p = other_player(spell_sender)
 
             if not player_is_hor_defended(other_p):
+                print("Hit other player!")
                 player_health[other_p] -= 1
             elif rebound:
                 send_spell(other_p, "LEFT")
 
             if player_health[other_p] == 0:
                 # GAME END
+                print("Ending game!")
                 game_state = "GAME_END"
                 broadcast("E")
 
