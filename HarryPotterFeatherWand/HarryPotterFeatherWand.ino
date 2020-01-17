@@ -33,14 +33,7 @@ String decode_spell(int spell) {
 }
 
 int button_pin = 14;
-
-boolean local_BTN_DOWN() {
-  return digitalRead(button_pin) == 0;
-}
-
-boolean local_BTN_UP() {
-  return digitalRead(button_pin) == 1;
-}
+int prev_button_state = LOW;
 
 String spell_names[4] = {"Left", "Right", "Up", "Down"};
 char spell_short[4] = {'L', 'R', 'U', 'D'};
@@ -445,21 +438,26 @@ void loop(void)
     delay(1000);
   }
 
+  int button_state = digitalRead(button_pin);
+
   switch (state) {
     case GAME_END:
-      // if(local_BTN_DOWN):
-      //   wifi_send_value("BTN_DOWN")
-      // if(local_BTN_UP):
-      //   wifi_send_value("BTN_UP")
-      // if(receive_GAME_START):
-      //   state = GAME_START
+      if (button_state != prev_button_state) {
+        if (button_state == HIGH)
+          wifi_send_value('V');
+        else
+          wifi_send_value('^');
+
+        if (receive_GAME_START)
+          state = GAME_START;
+      }
       break;
     case GAME_START:
-      // if(local_BTN_UP):
-      //   state = BTN_UP
+      if (prev_button_state == LOW && button_state == HIGH)
+        state = BTN_UP;
       break;
     case BTN_UP:
-      if (local_BTN_DOWN()) {
+      if (button_state == LOW) {
         state = BTN_DOWN;
       }
       break;
@@ -478,7 +476,7 @@ void loop(void)
         else {
         rm_me += 1;
         }*/
-      if (local_BTN_UP()) {
+      if (button_state == HIGH) {
         int spell = maxwell_prediction(IMU_x, IMU_y, IMU_z, num_IMU_points);
         //   wifi_send_value(spell);  // Send the spell to the hat as a CAST <spell> message]
         num_IMU_points = 0;
@@ -489,27 +487,32 @@ void loop(void)
       break;
   }
 
-  // TODO use a real measurement of gravity, this is temporary
-  float gravity[3] = {0.0, 0.0, 10.0};
+  prev_button_state = button_state;
+  /*
+    // TODO use a real measurement of gravity, this is temporary
+    float gravity[3] = {0.0, 0.0, 10.0};
 
-  float accel[3] = {event.acceleration.x - gravity[0],
-                    event.acceleration.y - gravity[1],
-                    event.acceleration.z - gravity[2]
-                   };
+    float accel[3] = {event.acceleration.x - gravity[0],
+                      event.acceleration.y - gravity[1],
+                      event.acceleration.z - gravity[2]
+                     };
 
-  // Get magnitude of this acceleration in YZ plane
-  float mag_p = sqrt(sq(accel[1]) + sq(accel[2]));
-  if (mag_p > min_spell_accel)
-  {
-    spell_t spell = accel_dir(gravity, accel);
-    String spell_name = spell_names[spell];
-    wifi_send_value(spell_short[spell]);
-    //Serial.print("Spell cast: ");
-    //Serial.println(spell_name);
-    //delay(1000);
+    // Get magnitude of this acceleration in YZ plane
+    float mag_p = sqrt(sq(accel[1]) + sq(accel[2]));
+    if (mag_p > min_spell_accel)
+    {
+      spell_t spell = accel_dir(gravity, accel);
+      String spell_name = spell_names[spell];
+      wifi_send_value(spell_short[spell]);
+      //Serial.print("Spell cast: ");
+      //Serial.println(spell_name);
+      //delay(1000);
+    }
+  */
+
+  if (receive_GAME_END) {
+    state = GAME_END;
   }
-
-  // if(receive_GAME_END):
-  //   state = GAME_END
+  
   delay(10);
 }
