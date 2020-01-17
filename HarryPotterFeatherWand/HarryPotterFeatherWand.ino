@@ -13,10 +13,26 @@
 // Game state
 enum state_t {GAME_END = 0, GAME_START = 1, BTN_UP = 2, BTN_DOWN = 3};
 
-state_t state = GAME_END;
+state_t state = BTN_DOWN;
+
+int rm_me = 0;
 
 // Gesture detection
 enum spell_t {ERR = -1, LEFT = 0, RIGHT = 1, UP = 2, DOWN = 3};
+String decode_spell(int spell) {
+  switch(spell) {
+    case 0:
+      return "LEFT";
+    case 1:
+      return "RIGHT";
+    case 2:
+      return "UP";
+    case 3:
+      return "DOWN";
+    default:
+      return "ERR";
+  }
+}
 String spell_names[4] = {"Left", "Right", "Up", "Down"};
 // Minimum acceleration to trigger a spell (m/s^2)
 const float min_spell_accel = 2.5;
@@ -325,12 +341,10 @@ int len_trace = 500; // 5 seconds of data
 
 int maxwell_prediction(float IMU_x[], float IMU_y[], float IMU_z[], int num_IMU_points) {
   float gravity_x = IMU_x[0];
-  float gravity_y = IMU_y[1];
-  float gravity_z = IMU_z[2];
-
+  float gravity_y = IMU_y[0];
+  float gravity_z = IMU_z[0];
   float gravity[2] = {gravity_y, gravity_z};
   
-
   int pred = -1;
 
   boolean max_set = false;
@@ -340,14 +354,17 @@ int maxwell_prediction(float IMU_x[], float IMU_y[], float IMU_z[], int num_IMU_
   
   int i = 0;
   for(i = 0; i < num_IMU_points; i++) {
-    float y = IMU_y[i];
-    float z = IMU_z[i];
+    float y = IMU_y[i] - gravity_y;
+    float z = IMU_z[i] - gravity_z;
     float p[2] = {y, z};
     
     float a = y * y + z * z;
-    if(a > 2.5*2.5) {
+    if(a > 6.25) {
       float cos_vec = vec_cos2(gravity, p);
       float cross = (gravity_y * z) - (gravity_z * y);
+      if(isnan(cos_vec)) {
+        continue;
+      }
       if(cos_vec > 0.707) {
         pred = 2;
       }
@@ -377,6 +394,9 @@ int maxwell_prediction(float IMU_x[], float IMU_y[], float IMU_z[], int num_IMU_
     float maxp[2] = {maxp_y, maxp_z};
     float cos_vec = vec_cos2(gravity, maxp);
     float cross = (gravity_y * maxp_z) - (gravity_z * maxp_y);
+    if(isnan(cos_vec)) {
+        return -1;
+    }
     if(cos_vec > 0.707) {
       pred = 2;
     }
@@ -395,6 +415,11 @@ int maxwell_prediction(float IMU_x[], float IMU_y[], float IMU_z[], int num_IMU_
 
   return pred;
 }
+
+float IMU_x[500];
+float IMU_y[500];
+float IMU_z[500];
+int num_IMU_points = 0;
 
 void loop(void)
 {
@@ -420,14 +445,27 @@ void loop(void)
       //   state = BTN_DOWN
       break;
     case BTN_DOWN:
-      //IMU_x[num_IMU_points] = event.acceleration.x;
-      //IMU_y[num_IMU_points] = event.acceleration.y;
-      //IMU_z[num_IMU_points] = event.acceleration.z;
-      //num_IMU_points += 1;
+      IMU_x[num_IMU_points] = event.acceleration.x;
+      IMU_y[num_IMU_points] = event.acceleration.y;
+      IMU_z[num_IMU_points] = event.acceleration.z;
+      num_IMU_points += 1;
+      if(rm_me > 200) {
+        int spell = maxwell_prediction(IMU_x, IMU_y, IMU_z, num_IMU_points);
+        num_IMU_points = 0;
+        rm_me = 0;
+        Serial.print("Spell Cast: ");
+        Serial.println(decode_spell(spell));
+      }
+      else {
+        rm_me += 1;
+      }
       // if(local_BTN_UP):
-      //   spell = classify_spell(IMU_x, IMU_y, IMU_z, num_IMU_points);
-      //   ble_send_value(spell);  // Send the spell to the hat as a CAST <spell> message
+      //   int spell = maxwell_prediction(IMU_x, IMU_y, IMU_z, num_IMU_points);
+      //   ble_send_value(spell);  // Send the spell to the hat as a CAST <spell> message]
+      //   num_IMU_points = 0;
       //   state = BTN_UP;
+      //   Serial.print("Spell Cast: ");
+      //   Serial.println(spell);
       break;
   }
 
@@ -446,9 +484,9 @@ void loop(void)
     spell_t spell = accel_dir(gravity, accel);
     String spell_name = spell_names[spell];
     ble_send_value(spell_name.c_str());
-    Serial.print("Spell cast: ");
-    Serial.println(spell_name);
-    delay(1000);
+    //Serial.print("Spell cast: ");
+    //Serial.println(spell_name);
+    //delay(1000);
   }
 
   // if(receive_GAME_END):
@@ -457,5 +495,5 @@ void loop(void)
   // Check for BLE disconnection
   // TODO: handle disconnection event
   check_ble_status();
-  delay(500);
+  delay(10);
 }
