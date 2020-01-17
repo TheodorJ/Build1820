@@ -130,6 +130,9 @@ def process_message(ip, value):
     """
     print("Received data: %s" % value)
 
+    global game_state
+    global num_wands_ready
+
     if ip not in player_health.keys():
         player_health[ip] = 1
         player_last_hor_defend[ip] = now()
