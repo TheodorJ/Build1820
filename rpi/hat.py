@@ -58,10 +58,10 @@ def process_message(ip, value):
     """
     print("Received data: %s (hex %s)" % (value, hexlify(value)))
 
-    if handle not in player_health.keys():
-        player_health[handle] = 5
-        player_last_hor_defend[handle] = now()
-        player_last_ver_defend[handle] = now()
+    if ip not in player_health.keys():
+        player_health[ip] = 1
+        player_last_hor_defend[ip] = now()
+        player_last_ver_defend[ip] = now()
 
     if(value == "V"): # button down
         if state == "GAME_END":
@@ -76,7 +76,7 @@ def process_message(ip, value):
     if(value in spells): # cast
         if(state == "GAME_START"):
             if(value == "L"):   # LEFT
-                send_spell(handle, "LEFT")
+                send_spell(ip, "LEFT")
 
             elif(value == "R"): # RIGHT
                 player_last_hor_defend[handle] = now()
@@ -84,7 +84,7 @@ def process_message(ip, value):
                 player_last_ver_defend[handle] = now()
             elif(value == "D"): # DOWN
 
-                send_spell(handle, "LEFT")
+                send_spell(ip, "LEFT")
             else:             # Error
                 pass
 
