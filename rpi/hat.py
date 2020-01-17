@@ -162,7 +162,7 @@ def process_message(ip, value):
     if(value in spells): # cast
         if(game_state == "GAME_START"):
             if(value == "L"):   # LEFT
-                send_spell(ip, "LEFT")
+                send_spell("LEFT", ip)
 
             elif(value == "R"): # RIGHT
                 player_last_hor_defend[ip] = now()
@@ -170,7 +170,7 @@ def process_message(ip, value):
                 player_last_ver_defend[ip] = now()
             elif(value == "D"): # DOWN
 
-                send_spell(ip, "LEFT")
+                send_spell("DOWN", ip)
             else:             # Error
                 pass
 
@@ -191,7 +191,7 @@ while 1:
                 print("Hit other player!")
                 player_health[other_p] -= 1
             elif rebound:
-                send_spell(other_p, "LEFT")
+                send_spell("LEFT", other_p)
 
             if player_health[other_p] == 0:
                 # GAME END
@@ -207,7 +207,7 @@ while 1:
             if not player_is_ver_defended(other_p):
                 player_health[other_p] -= 1
             elif rebound:
-                send_spell(other_p, "LEFT")
+                send_spell("DOWN", other_p)
 
             if player_health[other_p] == 0:
                 # GAME END
