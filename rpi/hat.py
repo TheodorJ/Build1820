@@ -23,11 +23,11 @@ state = "GAME_END"
 player_health = {}
 player_last_hor_defend = {}
 player_last_ver_defend = {}
-defend_duration = 3000
+defend_duration = 1000
 
 spell_in_air = False
 spell_birthday = now()
-spell_lifespan = 3000 # 3 seconds
+spell_lifespan = 2000 # 3 seconds
 spell_type = "ERR"
 spell_sender = None
 
@@ -52,6 +52,76 @@ def send_spell(spell, sender):
     spell_sender = sender
     spell_type = spell
     spell_birthday = now()
+
+def display_cast_LEFT(player):
+    try:
+        pid = os.fork()
+        if pid > 0:
+            # parent process, return and keep running
+            return
+    except OSError, e:
+        print >>sys.stderr, "fork #1 failed: %d (%s)" % (e.errno, e.strerror)
+        sys.exit(1)
+
+    # Execute display
+
+    os._exit(os.EX_OK)
+
+def display_cast_DOWN(player):
+    try:
+        pid = os.fork()
+        if pid > 0:
+            # parent process, return and keep running
+            return
+    except OSError, e:
+        print >>sys.stderr, "fork #1 failed: %d (%s)" % (e.errno, e.strerror)
+        sys.exit(1)
+
+    # Execute display
+
+    os._exit(os.EX_OK)
+
+def display_GAME_END():
+    try:
+        pid = os.fork()
+        if pid > 0:
+            # parent process, return and keep running
+            return
+    except OSError, e:
+        print >>sys.stderr, "fork #1 failed: %d (%s)" % (e.errno, e.strerror)
+        sys.exit(1)
+
+    # Execute display
+
+    os._exit(os.EX_OK)
+
+def display_defend_LEFT(player):
+    try:
+        pid = os.fork()
+        if pid > 0:
+            # parent process, return and keep running
+            return
+    except OSError, e:
+        print >>sys.stderr, "fork #1 failed: %d (%s)" % (e.errno, e.strerror)
+        sys.exit(1)
+
+    # Execute display
+
+    os._exit(os.EX_OK)
+
+def display_defend_DOWN(player):
+    try:
+        pid = os.fork()
+        if pid > 0:
+            # parent process, return and keep running
+            return
+    except OSError, e:
+        print >>sys.stderr, "fork #1 failed: %d (%s)" % (e.errno, e.strerror)
+        sys.exit(1)
+
+    # Execute display
+
+    os._exit(os.EX_OK)
 
 def process_message(ip, value):
     """
