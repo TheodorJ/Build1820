@@ -42,10 +42,10 @@ def other_player(handle):
     return [x for x in player_health.keys() if x != handle][0]
 
 def player_is_hor_defended(player):
-    return (now() - player_last_hor_defend[player]) > defend_duration
+    return (now() - player_last_hor_defend[player]) < defend_duration
 
 def player_is_ver_defended(player):
-    return (now() - player_last_ver_defend[player]) > defend_duration
+    return (now() - player_last_ver_defend[player]) < defend_duration
 
 def send_spell(spell, sender):
     global spell_in_air
