@@ -13,7 +13,7 @@
 // Game state
 enum state_t {GAME_END = 0, GAME_START = 1, BTN_UP = 2, BTN_DOWN = 3};
 
-state_t state = BTN_DOWN;
+state_t state = BTN_UP;
 
 int rm_me = 0;
 
@@ -33,6 +33,17 @@ String decode_spell(int spell) {
       return "ERR";
   }
 }
+
+int button_pin = 14;
+
+boolean local_BTN_DOWN() {
+  return digitalRead(button_pin) == 0;
+}
+
+boolean local_BTN_UP() {
+  return digitalRead(button_pin) == 1;
+}
+
 String spell_names[4] = {"Left", "Right", "Up", "Down"};
 // Minimum acceleration to trigger a spell (m/s^2)
 const float min_spell_accel = 2.5;
@@ -326,6 +337,7 @@ void connect_ble(void)
 
 void setup(void)
 {
+  pinMode(button_pin, INPUT_PULLUP);
   Serial.begin(115200);
   Serial.println("Welcome to the MagikWand 7000(TM)(C)(R)!"); Serial.println("");
 
@@ -340,9 +352,13 @@ void setup(void)
 int len_trace = 500; // 5 seconds of data
 
 int maxwell_prediction(float IMU_x[], float IMU_y[], float IMU_z[], int num_IMU_points) {
+  if(num_IMU_points < 30) {
+    return -1;
+  }
   float gravity_x = IMU_x[0];
   float gravity_y = IMU_y[0];
   float gravity_z = IMU_z[0];
+  
   float gravity[2] = {gravity_y, gravity_z};
   
   int pred = -1;
@@ -353,7 +369,7 @@ int maxwell_prediction(float IMU_x[], float IMU_y[], float IMU_z[], int num_IMU_
   float maxp_z = 0.0;
   
   int i = 0;
-  for(i = 0; i < num_IMU_points; i++) {
+  for(i = 1; i < num_IMU_points; i++) {
     float y = IMU_y[i] - gravity_y;
     float z = IMU_z[i] - gravity_z;
     float p[2] = {y, z};
@@ -389,6 +405,13 @@ int maxwell_prediction(float IMU_x[], float IMU_y[], float IMU_z[], int num_IMU_
         maxp_z = z;
       }
     }
+
+    gravity_y *= i;
+    gravity_y += IMU_y[i];
+    gravity_y /= i+1;
+    gravity_z *= i;
+    gravity_z += IMU_z[i];
+    gravity_z /= i+1;
   }
   if(pred == -1) {
     float maxp[2] = {maxp_y, maxp_z};
@@ -441,15 +464,16 @@ void loop(void)
       //   state = BTN_UP
       break;
     case BTN_UP:
-      // if(local_BTN_DOWN):
-      //   state = BTN_DOWN
+       if(local_BTN_DOWN()) {
+         state = BTN_DOWN;
+       }
       break;
     case BTN_DOWN:
       IMU_x[num_IMU_points] = event.acceleration.x;
       IMU_y[num_IMU_points] = event.acceleration.y;
       IMU_z[num_IMU_points] = event.acceleration.z;
       num_IMU_points += 1;
-      if(rm_me > 200) {
+      /*if(rm_me > 200) {
         int spell = maxwell_prediction(IMU_x, IMU_y, IMU_z, num_IMU_points);
         num_IMU_points = 0;
         rm_me = 0;
@@ -458,14 +482,15 @@ void loop(void)
       }
       else {
         rm_me += 1;
-      }
-      // if(local_BTN_UP):
-      //   int spell = maxwell_prediction(IMU_x, IMU_y, IMU_z, num_IMU_points);
+      }*/
+      if(local_BTN_UP()) {
+        int spell = maxwell_prediction(IMU_x, IMU_y, IMU_z, num_IMU_points);
       //   ble_send_value(spell);  // Send the spell to the hat as a CAST <spell> message]
-      //   num_IMU_points = 0;
-      //   state = BTN_UP;
-      //   Serial.print("Spell Cast: ");
-      //   Serial.println(spell);
+        num_IMU_points = 0;
+        state = BTN_UP;
+        Serial.print("Spell Cast: ");
+        Serial.println(decode_spell(spell));
+      }
       break;
   }
 
