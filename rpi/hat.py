@@ -1,6 +1,9 @@
 import telnetlib
 from binascii import hexlify
 import time
+import os
+
+from shivi_pixel import endgame, draw_spell
 
 def now():
     return int(round(time.time() * 1000))
@@ -23,11 +26,11 @@ game_state = "GAME_END"
 player_health = {}
 player_last_hor_defend = {}
 player_last_ver_defend = {}
-defend_duration = 1000
+defend_duration = 1500
 
 spell_in_air = False
 spell_birthday = now()
-spell_lifespan = 2000 # 2 seconds
+spell_lifespan = 3000 # 3 seconds
 spell_type = "ERR"
 spell_sender = None
 
@@ -63,19 +66,26 @@ def broadcast(msg):
 
     print("Broadcasting %s" % msg)
 
-"""def display_cast_LEFT(player):
+def ip_to_player(ip):
+    if ip == ips[0]:
+        return 0
+    else:
+        return 1
+
+def display_cast_LEFT(ip):
     try:
         pid = os.fork()
         if pid > 0:
             # parent process, return and keep running
             return
-    except OSError, e:
-        print >>sys.stderr, "fork #1 failed: %d (%s)" % (e.errno, e.strerror)
-        sys.exit(1)
+    except:
+        pass
 
+    player = ip_to_player(ip)
     # Execute display
+    draw_spell(player, 0)
 
-    os._exit(os.EX_OK)
+    None.fake_error
 
 def display_cast_DOWN(player):
     try:
@@ -83,13 +93,14 @@ def display_cast_DOWN(player):
         if pid > 0:
             # parent process, return and keep running
             return
-    except OSError, e:
-        print >>sys.stderr, "fork #1 failed: %d (%s)" % (e.errno, e.strerror)
-        sys.exit(1)
+    except:
+        pass
 
+    player = ip_to_player(ip)
     # Execute display
+    draw_spell(player, 3)
 
-    os._exit(os.EX_OK)
+    None.fake_error
 
 def display_GAME_END():
     try:
@@ -97,13 +108,13 @@ def display_GAME_END():
         if pid > 0:
             # parent process, return and keep running
             return
-    except OSError, e:
-        print >>sys.stderr, "fork #1 failed: %d (%s)" % (e.errno, e.strerror)
-        sys.exit(1)
+    except:
+        pass
 
     # Execute display
+    endgame()
 
-    os._exit(os.EX_OK)
+    exit(0)
 
 def display_defend_LEFT(player):
     try:
@@ -111,13 +122,14 @@ def display_defend_LEFT(player):
         if pid > 0:
             # parent process, return and keep running
             return
-    except OSError, e:
-        print >>sys.stderr, "fork #1 failed: %d (%s)" % (e.errno, e.strerror)
-        sys.exit(1)
+    except:
+        pass
 
+    player = ip_to_player(ip)
     # Execute display
+    draw_spell(player, 1)
 
-    os._exit(os.EX_OK)
+    None.fake_error
 
 def display_defend_DOWN(player):
     try:
@@ -125,13 +137,14 @@ def display_defend_DOWN(player):
         if pid > 0:
             # parent process, return and keep running
             return
-    except OSError, e:
-        print >>sys.stderr, "fork #1 failed: %d (%s)" % (e.errno, e.strerror)
-        sys.exit(1)
+    except:
+        pass
 
+    player = ip_to_player(ip)
     # Execute display
+    draw_spell(player, 2)
 
-    os._exit(os.EX_OK)"""
+    None.fake_error
 
 def process_message(ip, value):
     """
@@ -144,7 +157,7 @@ def process_message(ip, value):
     global num_wands_ready
 
     if ip not in player_health.keys():
-        player_health[ip] = 1
+        player_health[ip] = 2
         player_last_hor_defend[ip] = now()
         player_last_ver_defend[ip] = now()
 
@@ -164,14 +177,16 @@ def process_message(ip, value):
         if(game_state == "GAME_START"):
             if(value == "L"):   # LEFT
                 send_spell("LEFT", ip)
-
+                display_cast_LEFT(ip)
             elif(value == "R"): # RIGHT
                 player_last_hor_defend[ip] = now()
+                display_defend_LEFT(ip)
             elif(value == "U"): # UP
                 player_last_ver_defend[ip] = now()
+                display_defend_DOWN(ip)
             elif(value == "D"): # DOWN
-
                 send_spell("DOWN", ip)
+                display_cast_DOWN(ip)
             else:             # Error
                 pass
 
@@ -199,6 +214,14 @@ while 1:
                 print("Ending game!")
                 game_state = "GAME_END"
                 broadcast("E")
+                player_health[spell_sender] = 1
+                player_last_hor_defend[spell_sender] = now()
+                player_last_ver_defend[spell_sender] = now()
+                player_health[other_p] = 1
+                player_last_hor_defend[other_p] = now()
+                player_last_ver_defend[other_p] = now()
+                display_GAME_END()
+                exit(0)
 
             spell_in_air = False
         if spell_type == "DOWN":
@@ -214,6 +237,14 @@ while 1:
                 # GAME END
                 game_state = "GAME_END"
                 broadcast("E")
+                player_health[spell_sender] = 1
+                player_last_hor_defend[spell_sender] = now()
+                player_last_ver_defend[spell_sender] = now()
+                player_health[other_p] = 1
+                player_last_hor_defend[other_p] = now()
+                player_last_ver_defend[other_p] = now()
+                display_GAME_END()
+                exit(0)
 
             spell_in_air = False
 
