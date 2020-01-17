@@ -36,6 +36,8 @@ spell_sender = None
 
 rebound = False
 
+num_lives = 3
+
 # IPs of the wands
 ips = ["192.168.4.11","192.168.4.12"]
 # telnet handles
@@ -157,7 +159,7 @@ def process_message(ip, value):
     global num_wands_ready
 
     if ip not in player_health.keys():
-        player_health[ip] = 1
+        player_health[ip] = num_lives
         player_last_hor_defend[ip] = now()
         player_last_ver_defend[ip] = now()
 
@@ -176,17 +178,17 @@ def process_message(ip, value):
     if(value in spells): # cast
         if(game_state == "GAME_START"):
             if(value == "L"):   # LEFT
-                send_spell("LEFT", ip)
-                display_cast_LEFT(ip)
+                if not spell_in_air:
+                    send_spell("LEFT", ip)
+                    display_cast_LEFT(ip)
             elif(value == "R"): # RIGHT
                 player_last_hor_defend[ip] = now()
-                display_defend_LEFT(ip)
             elif(value == "U"): # UP
                 player_last_ver_defend[ip] = now()
-                display_defend_DOWN(ip)
             elif(value == "D"): # DOWN
-                send_spell("DOWN", ip)
-                display_cast_DOWN(ip)
+                if not spell_in_air:
+                    send_spell("DOWN", ip)
+                    display_cast_DOWN(ip)
             else:             # Error
                 pass
 
@@ -206,22 +208,30 @@ while 1:
             if not player_is_hor_defended(other_p):
                 print("Hit other player!")
                 player_health[other_p] -= 1
+
+                if player_health[other_p] == 0:
+                    # GAME END
+                    print("Ending game!")
+                    game_state = "GAME_END"
+                    broadcast("E")
+                    player_health[spell_sender] = num_lives
+                    player_last_hor_defend[spell_sender] = now()
+                    player_last_ver_defend[spell_sender] = now()
+                    player_health[other_p] = num_lives
+                    player_last_hor_defend[other_p] = now()
+                    player_last_ver_defend[other_p] = now()
+                    endgame()
+                    exit(0)
+                else:
+                    damage(ip_to_player(other_p))
             elif rebound:
                 send_spell("LEFT", other_p)
+            else:
+                player = ip_to_player(other_p)
+                # Execute display
+                draw_spell(player, 1)
 
-            if player_health[other_p] == 0:
-                # GAME END
-                print("Ending game!")
-                game_state = "GAME_END"
-                broadcast("E")
-                player_health[spell_sender] = 1
-                player_last_hor_defend[spell_sender] = now()
-                player_last_ver_defend[spell_sender] = now()
-                player_health[other_p] = 1
-                player_last_hor_defend[other_p] = now()
-                player_last_ver_defend[other_p] = now()
-                display_GAME_END()
-                exit(0)
+
 
             spell_in_air = False
         if spell_type == "DOWN":
@@ -230,21 +240,29 @@ while 1:
 
             if not player_is_ver_defended(other_p):
                 player_health[other_p] -= 1
+
+                if player_health[other_p] == 0:
+                    # GAME END
+                    game_state = "GAME_END"
+                    broadcast("E")
+                    player_health[spell_sender] = num_lives
+                    player_last_hor_defend[spell_sender] = now()
+                    player_last_ver_defend[spell_sender] = now()
+                    player_health[other_p] = num_lives
+                    player_last_hor_defend[other_p] = now()
+                    player_last_ver_defend[other_p] = now()
+                    endgame()
+                    exit(0)
+                else:
+                    damage(ip_to_player(other_p))
+
             elif rebound:
                 send_spell("DOWN", other_p)
+            else:
+                player = ip_to_player(other_p)
+                # Execute display
+                draw_spell(player, 2)
 
-            if player_health[other_p] == 0:
-                # GAME END
-                game_state = "GAME_END"
-                broadcast("E")
-                player_health[spell_sender] = 1
-                player_last_hor_defend[spell_sender] = now()
-                player_last_ver_defend[spell_sender] = now()
-                player_health[other_p] = 1
-                player_last_hor_defend[other_p] = now()
-                player_last_ver_defend[other_p] = now()
-                display_GAME_END()
-                exit(0)
 
             spell_in_air = False
 
