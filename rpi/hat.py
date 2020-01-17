@@ -31,6 +31,8 @@ spell_lifespan = 3000 # 3 seconds
 spell_type = "ERR"
 spell_sender = None
 
+spell_rebound = False
+
 # IPs of the wands
 ips = ["192.168.4.11","192.168.4.12"]
 # telnet handles
@@ -103,6 +105,8 @@ while 1:
 
             if not player_is_hor_defended(other_p):
                 player_health[other_p] -= 1
+            elif rebound:
+                send_spell(other_p, "LEFT")
 
             if player_health[other_p] == 0:
                 # GAME END
@@ -115,6 +119,8 @@ while 1:
 
             if not player_is_ver_defended(other_p):
                 player_health[other_p] -= 1
+            elif rebound:
+                send_spell(other_p, "LEFT")
 
             if player_health[other_p] == 0:
                 # GAME END
