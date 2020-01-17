@@ -53,6 +53,12 @@ def send_spell(spell, sender):
     spell_type = spell
     spell_birthday = now()
 
+def broadcast(msg):
+    for tn in tns:
+        tn.write(msg)
+
+    print("Broadcasting %s" % msg)
+
 """def display_cast_LEFT(player):
     try:
         pid = os.fork()
@@ -143,6 +149,7 @@ def process_message(ip, value):
             num_wands_ready += 1
         if(num_wands_ready == 2):
             game_state = "GAME_START"
+            broadcast("B")
 
     if(value == "^"): # button up
         if game_state == "GAME_END":
@@ -184,6 +191,7 @@ while 1:
             if player_health[other_p] == 0:
                 # GAME END
                 game_state = "GAME_END"
+                broadcast("E")
 
             spell_in_air = False
         if spell_type == "DOWN":
@@ -198,6 +206,7 @@ while 1:
             if player_health[other_p] == 0:
                 # GAME END
                 game_state = "GAME_END"
+                broadcast("E")
 
             spell_in_air = False
 
