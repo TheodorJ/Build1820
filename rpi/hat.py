@@ -18,7 +18,7 @@ B/E     - game begin/end
 spells = ["U", "D", "L", "R"]
 
 num_wands_ready = 0
-state = "GAME_END"
+game_state = "GAME_END"
 
 player_health = {}
 player_last_hor_defend = {}
@@ -53,7 +53,7 @@ def send_spell(spell, sender):
     spell_type = spell
     spell_birthday = now()
 
-def display_cast_LEFT(player):
+"""def display_cast_LEFT(player):
     try:
         pid = os.fork()
         if pid > 0:
@@ -121,14 +121,14 @@ def display_defend_DOWN(player):
 
     # Execute display
 
-    os._exit(os.EX_OK)
+    os._exit(os.EX_OK)"""
 
 def process_message(ip, value):
     """
     handle -- integer, characteristic read handle the data was received on
     value -- bytearray, the data returned in the notification
     """
-    print("Received data: %s (hex %s)" % (value, hexlify(value)))
+    print("Received data: %s" % value)
 
     if ip not in player_health.keys():
         player_health[ip] = 1
@@ -136,17 +136,17 @@ def process_message(ip, value):
         player_last_ver_defend[ip] = now()
 
     if(value == "V"): # button down
-        if state == "GAME_END":
+        if game_state == "GAME_END":
             num_wands_ready += 1
         if(num_wands_ready == 2):
-            state = "GAME_START"
+            game_state = "GAME_START"
 
     if(value == "^"): # button up
-        if state == "GAME_END":
+        if game_state == "GAME_END":
             num_wands_ready -= 1
 
     if(value in spells): # cast
-        if(state == "GAME_START"):
+        if(game_state == "GAME_START"):
             if(value == "L"):   # LEFT
                 send_spell(ip, "LEFT")
 
@@ -180,7 +180,7 @@ while 1:
 
             if player_health[other_p] == 0:
                 # GAME END
-                state = "GAME_END"
+                game_state = "GAME_END"
 
             spell_in_air = False
         if spell_type == "DOWN":
@@ -194,7 +194,7 @@ while 1:
 
             if player_health[other_p] == 0:
                 # GAME END
-                state = "GAME_END"
+                game_state = "GAME_END"
 
             spell_in_air = False
 
@@ -202,14 +202,14 @@ while 1:
     for ip in ips:
         tn = tns[ip]
         try:
-            spell = tn.read_eager()
+            spell = tn.read_eager().decode("UTF-8")
 
             # read_eager returns "" if no data available
             if (spell != ""):
                 print("received " + spell + " on " + ip)
 
                 # Process each letter in the message
-                for c in spell.decode("UTF-8"):
+                for c in spell:
                     process_message(ip, c)
 
         except EOFError:
