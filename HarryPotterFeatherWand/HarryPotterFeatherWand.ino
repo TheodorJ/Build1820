@@ -1,10 +1,8 @@
 #include <Wire.h>
 #include <Adafruit_Sensor.h>
 #include <Adafruit_ADXL343.h>
-#include <BLEDevice.h>
-#include <BLEServer.h>
-#include <BLEUtils.h>
-#include <BLE2902.h>
+#include <WiFi.h>
+
 
 // ---------------------- //
 // VARIABLES & PARAMETERS //
@@ -20,7 +18,7 @@ int rm_me = 0;
 // Gesture detection
 enum spell_t {ERR = -1, LEFT = 0, RIGHT = 1, UP = 2, DOWN = 3};
 String decode_spell(int spell) {
-  switch(spell) {
+  switch (spell) {
     case 0:
       return "LEFT";
     case 1:
@@ -45,19 +43,19 @@ boolean local_BTN_UP() {
 }
 
 String spell_names[4] = {"Left", "Right", "Up", "Down"};
+char spell_short[4] = {'L', 'R', 'U', 'D'};
+
 // Minimum acceleration to trigger a spell (m/s^2)
 const float min_spell_accel = 2.5;
 #define COS_45 (0.7071)
 
 // Bluetooth
-const char *ble_name = "MagicWand";
-BLEServer * ble_server = NULL;
-BLECharacteristic* ble_spell_characteristic = NULL;
-volatile bool ble_dev_connected = false;
-bool ble_old_dev_connected = false;
+const char* ssid = "MagicNet";
+const char* password = "horcruxes";
 
-#define SERVICE_UUID        "4fafc201-1fb5-459e-8fcc-c5c9c331914b"
-#define CHARACTERISTIC_UUID "beb5483e-36e1-4688-b7f5-ea07361b26a8"
+#define MAX_SRV_CLIENTS 1
+WiFiServer server(23);
+WiFiClient serverClients[MAX_SRV_CLIENTS];
 
 
 // Accelerometer
@@ -176,55 +174,6 @@ void displayRange(void)
   Serial.println(" g");
 }
 
-// BLE connection/disconnection callbacks
-class ble_server_callbacks: public BLEServerCallbacks {
-    void onConnect(BLEServer* pServer) {
-      ble_dev_connected = true;
-    };
-
-    void onDisconnect(BLEServer* pServer) {
-      ble_dev_connected = false;
-    }
-};
-
-void display_ble_status(void)
-{
-  Serial.println(ble_dev_connected ? "[BLE] Connected!" : "[BLE] Disconnected");
-}
-
-// Check for BLE disconnection/connection
-bool check_ble_status(void)
-{
-  // Check if BLE has disconnected
-  if (!ble_dev_connected && ble_old_dev_connected) {
-    display_ble_status();
-    delay(500); // give the bluetooth stack the chance to get things ready
-    ble_server->startAdvertising(); // restart advertising
-    Serial.println("[BLE] restarting advertising");
-    ble_old_dev_connected = ble_dev_connected;
-  }
-
-  // Check if BLE has reconnected
-  if (ble_dev_connected && !ble_old_dev_connected) {
-    display_ble_status();
-    ble_old_dev_connected = ble_dev_connected;
-  }
-
-  return ble_dev_connected;
-}
-
-// Send a newly detected spell to connected device (raspberry Pi) via BLE notification
-void ble_send_value(const char *spell)
-{
-  if (check_ble_status()) {
-    ble_spell_characteristic->setValue((uint8_t*)spell, strlen(spell));
-    ble_spell_characteristic->notify();
-    Serial.print("[BLE] Sent message: ");
-    Serial.println(spell);
-    delay(3); // To prevent congestion. TODO can remove if delay is guaranteed elsewise
-  }
-}
-
 // Detect the direction of an acceleration vector, equivalently which spell this is.
 // Gravity should already be removed from p3.
 spell_t accel_dir(float gravity3[3], float p3[3])
@@ -260,6 +209,40 @@ spell_t accel_dir(float gravity3[3], float p3[3])
   return pred;
 }
 
+// Manage server connection requests
+void manage_connections(void) {
+  //check if there are any new clients
+  if (server.hasClient()) {
+    int i;
+    for (i = 0; i < MAX_SRV_CLIENTS; i++) {
+      //find free/disconnected spot
+      if (!serverClients[i] || !serverClients[i].connected()) {
+        if (serverClients[i]) serverClients[i].stop();
+        serverClients[i] = server.available();
+        if (!serverClients[i]) Serial.println("available broken");
+        Serial.print("New client: ");
+        Serial.print(i); Serial.print(' ');
+        Serial.println(serverClients[i].remoteIP());
+        break;
+      }
+    }
+    if (i >= MAX_SRV_CLIENTS) {
+      //no free/disconnected spot so reject
+      server.available().stop();
+    }
+  }
+}
+
+void wifi_send_value(char cmd) {
+  //push data to all connected telnet clients
+  for (int i = 0; i < MAX_SRV_CLIENTS; i++) {
+    if (serverClients[i] && serverClients[i].connected()) {
+      serverClients[i].write(&cmd, 1);
+      delay(1);
+    }
+  }
+}
+
 // -------------- //
 // Initialization //
 // -------------- //
@@ -286,53 +269,25 @@ void init_accelerometer(void)
   Serial.println("");
 }
 
-// Initialize BLE connection, do not wait for connections
-void init_ble(void)
+// Init and hang until wifi is connected
+void init_wifi(void)
 {
-  BLEDevice::init(ble_name);
+  WiFi.begin(ssid, password);
 
-  Serial.print("[BLE] initialized with MAC ");
-  Serial.println(BLEDevice::getAddress().toString().c_str());
+  Serial.println("Connecting Wifi ");
+  while (WiFi.status() != WL_CONNECTED) {
+    delay(500);
+    // ESP.restart();
+  }
 
-  // Create the BLE Server
-  ble_server = BLEDevice::createServer();
-  ble_server->setCallbacks(new ble_server_callbacks());
+  Serial.println("");
+  Serial.println("WiFi connected");
+  Serial.println("IP address: ");
+  Serial.println(WiFi.localIP());
 
-  // Create the BLE Service
-  BLEService *ble_service = ble_server->createService(SERVICE_UUID);
-
-  // Create a BLE Characteristic
-  ble_spell_characteristic = ble_service->createCharacteristic(
-                               CHARACTERISTIC_UUID,
-                               BLECharacteristic::PROPERTY_READ   |
-                               BLECharacteristic::PROPERTY_WRITE  |
-                               BLECharacteristic::PROPERTY_NOTIFY |
-                               BLECharacteristic::PROPERTY_INDICATE
-                             );
-
-  // https://www.bluetooth.com/specifications/gatt/viewer?attributeXmlFile=org.bluetooth.descriptor.gatt.client_characteristic_configuration.xml
-  // Create a BLE Descriptor
-  ble_spell_characteristic->addDescriptor(new BLE2902());
-
-  // Start the service
-  ble_service->start();
-
-  // Start advertising
-  BLEAdvertising *ble_advertising = BLEDevice::getAdvertising();
-  ble_advertising->addServiceUUID(SERVICE_UUID);
-  ble_advertising->setScanResponse(false);
-  ble_advertising->setMinPreferred(0x0);  // set value to 0x00 to not advertise this parameter
-  BLEDevice::startAdvertising();
-  Serial.println("[BLE] Waiting for a client connection...");
-}
-
-// Hang until BLE is connected
-void connect_ble(void)
-{
-  // Hang until connection callback changes status
-  while (!ble_dev_connected);
-
-  display_ble_status();
+  //start the server
+  server.begin();
+  server.setNoDelay(true);
 }
 
 void setup(void)
@@ -342,7 +297,7 @@ void setup(void)
   Serial.println("Welcome to the MagikWand 7000(TM)(C)(R)!"); Serial.println("");
 
   init_accelerometer();
-  init_ble();
+  init_wifi();
 }
 
 // --------- //
@@ -352,53 +307,53 @@ void setup(void)
 int len_trace = 500; // 5 seconds of data
 
 int maxwell_prediction(float IMU_x[], float IMU_y[], float IMU_z[], int num_IMU_points) {
-  if(num_IMU_points < 30) {
+  if (num_IMU_points < 30) {
     return -1;
   }
   float gravity_x = IMU_x[0];
   float gravity_y = IMU_y[0];
   float gravity_z = IMU_z[0];
-  
+
   float gravity[2] = {gravity_y, gravity_z};
-  
+
   int pred = -1;
 
   boolean max_set = false;
   float maxa = 0.0;
   float maxp_y = 0.0;
   float maxp_z = 0.0;
-  
+
   int i = 0;
-  for(i = 1; i < num_IMU_points; i++) {
+  for (i = 1; i < num_IMU_points; i++) {
     float y = IMU_y[i] - gravity_y;
     float z = IMU_z[i] - gravity_z;
     float p[2] = {y, z};
-    
+
     float a = y * y + z * z;
-    if(a > 6.25) {
+    if (a > 6.25) {
       float cos_vec = vec_cos2(gravity, p);
       float cross = (gravity_y * z) - (gravity_z * y);
-      if(isnan(cos_vec)) {
+      if (isnan(cos_vec)) {
         continue;
       }
-      if(cos_vec > 0.707) {
+      if (cos_vec > 0.707) {
         pred = 2;
       }
-      else if(cos_vec < -0.707) {
+      else if (cos_vec < -0.707) {
         pred = 3;
       }
       else {
-        if(cross > 0) {
-            pred = 1;
+        if (cross > 0) {
+          pred = 1;
         }
         else {
-             pred = 0;
+          pred = 0;
         }
       }
       break;
     }
     else {
-      if(!max_set) {
+      if (!max_set) {
         max_set = true;
         maxa = a;
         maxp_y = y;
@@ -408,30 +363,30 @@ int maxwell_prediction(float IMU_x[], float IMU_y[], float IMU_z[], int num_IMU_
 
     gravity_y *= i;
     gravity_y += IMU_y[i];
-    gravity_y /= i+1;
+    gravity_y /= i + 1;
     gravity_z *= i;
     gravity_z += IMU_z[i];
-    gravity_z /= i+1;
+    gravity_z /= i + 1;
   }
-  if(pred == -1) {
+  if (pred == -1) {
     float maxp[2] = {maxp_y, maxp_z};
     float cos_vec = vec_cos2(gravity, maxp);
     float cross = (gravity_y * maxp_z) - (gravity_z * maxp_y);
-    if(isnan(cos_vec)) {
-        return -1;
+    if (isnan(cos_vec)) {
+      return -1;
     }
-    if(cos_vec > 0.707) {
+    if (cos_vec > 0.707) {
       pred = 2;
     }
-    else if(cos_vec < -0.707) {
+    else if (cos_vec < -0.707) {
       pred = 3;
     }
     else {
-      if(cross > 0) {
-          pred = 1;
+      if (cross > 0) {
+        pred = 1;
       }
       else {
-           pred = 0;
+        pred = 0;
       }
     }
   }
@@ -446,16 +401,56 @@ int num_IMU_points = 0;
 
 void loop(void)
 {
+  bool receive_GAME_START = false;
+  bool receive_GAME_END   = false;
+
   // Read accelerometer
   sensors_event_t event;
   accel.getEvent(&event);
 
+  // Process wifi
+  if (WiFi.status() == WL_CONNECTED) {
+    manage_connections();
+
+    // Nasty loop to accept command over wifi
+    for (int i = 0; i < MAX_SRV_CLIENTS; i++) {
+      if (serverClients[i] && serverClients[i].connected()) {
+        if (serverClients[i].available()) {
+          //get data from the telnet client
+          while (serverClients[i].available())
+          {
+            char cmd = serverClients[i].read( );
+            if (cmd == 'B') {
+              receive_GAME_START = true;
+            }
+            if (cmd == 'E') {
+              receive_GAME_END   = true;
+            }
+          }
+        }
+      }
+      else {
+        // CLeanup stuff
+        if (serverClients[i]) {
+          serverClients[i].stop();
+        }
+      }
+    }
+  } else {
+    Serial.println("WiFi not connected!");
+    for (int i = 0; i < MAX_SRV_CLIENTS; i++) {
+      if (serverClients[i])
+        serverClients[i].stop();
+    }
+    delay(1000);
+  }
+
   switch (state) {
     case GAME_END:
       // if(local_BTN_DOWN):
-      //   ble_send_value("BTN_DOWN")
+      //   wifi_send_value("BTN_DOWN")
       // if(local_BTN_UP):
-      //   ble_send_value("BTN_UP")
+      //   wifi_send_value("BTN_UP")
       // if(receive_GAME_START):
       //   state = GAME_START
       break;
@@ -464,9 +459,9 @@ void loop(void)
       //   state = BTN_UP
       break;
     case BTN_UP:
-       if(local_BTN_DOWN()) {
-         state = BTN_DOWN;
-       }
+      if (local_BTN_DOWN()) {
+        state = BTN_DOWN;
+      }
       break;
     case BTN_DOWN:
       IMU_x[num_IMU_points] = event.acceleration.x;
@@ -479,13 +474,13 @@ void loop(void)
         rm_me = 0;
         Serial.print("Spell Cast: ");
         Serial.println(decode_spell(spell));
-      }
-      else {
+        }
+        else {
         rm_me += 1;
-      }*/
-      if(local_BTN_UP()) {
+        }*/
+      if (local_BTN_UP()) {
         int spell = maxwell_prediction(IMU_x, IMU_y, IMU_z, num_IMU_points);
-      //   ble_send_value(spell);  // Send the spell to the hat as a CAST <spell> message]
+        //   wifi_send_value(spell);  // Send the spell to the hat as a CAST <spell> message]
         num_IMU_points = 0;
         state = BTN_UP;
         Serial.print("Spell Cast: ");
@@ -496,7 +491,7 @@ void loop(void)
 
   // TODO use a real measurement of gravity, this is temporary
   float gravity[3] = {0.0, 0.0, 10.0};
-  
+
   float accel[3] = {event.acceleration.x - gravity[0],
                     event.acceleration.y - gravity[1],
                     event.acceleration.z - gravity[2]
@@ -508,7 +503,7 @@ void loop(void)
   {
     spell_t spell = accel_dir(gravity, accel);
     String spell_name = spell_names[spell];
-    ble_send_value(spell_name.c_str());
+    wifi_send_value(spell_short[spell]);
     //Serial.print("Spell cast: ");
     //Serial.println(spell_name);
     //delay(1000);
@@ -516,9 +511,5 @@ void loop(void)
 
   // if(receive_GAME_END):
   //   state = GAME_END
-
-  // Check for BLE disconnection
-  // TODO: handle disconnection event
-  check_ble_status();
   delay(10);
 }
